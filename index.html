@@ -985,7 +985,7 @@ async function enterWork(withCountdown){
 function bumpInput(inp){ inp.classList.remove("bump"); void inp.offsetWidth; inp.classList.add("bump"); }
 function writeField(inp){
   const v = inp.value.replace(",", ".");
-  if(inp.dataset.f){ live.blocks[live.cur].ex[+inp.dataset.e].sets[+inp.dataset.set][inp.dataset.f] = v; }
+  if(inp.dataset.f){ const s = live.blocks[live.cur].ex[+inp.dataset.e].sets[+inp.dataset.set]; s[inp.dataset.f] = v; if(inp.dataset.f === "kg") s.kgTouched = true; }
   else if(inp.dataset.res){ live.blocks[live.cur].res[inp.dataset.res] = v; }
   saveLive();
 }
@@ -993,7 +993,10 @@ async function completeRound(i){
   const b = live.blocks[live.cur], was = b.ex.every(e => e.sets[i].done);
   if(was){ live.sel = null; saveLive(); toast("Aggiornato"); render(false); return; }
   const prs = b.ex.filter(e => { const s = e.sets[i], best = bestFor(e.name); if(!best) return false; const kg = toNum(s.kg), r = toNum(s.reps); return (kg > best.kg && kg > 0) || (kg === best.kg && r > best.reps); });
-  b.ex.forEach(e => e.sets[i].done = true); live.sel = null; saveLive();
+  b.ex.forEach(e => e.sets[i].done = true);
+  // il carico usato passa ai set successivi non ancora fatti e non modificati a mano
+  b.ex.forEach(e => { const kg = e.sets[i].kg; for(let j = i + 1; j < e.sets.length; j++){ const s = e.sets[j]; if(!s.done && !s.kgTouched) s.kg = kg; } });
+  live.sel = null; saveLive();
   const btn = document.querySelector('[data-act="round"]'); const rect = btn ? btn.getBoundingClientRect() : { left: innerWidth/2, top: innerHeight*.8, width: 0 };
   sfx.done(); haptic(60);
   if(prs.length){ setTimeout(() => { sfx.pr(); haptic([60,40,60,40,200]); fx.burst(innerWidth/2, innerHeight*.35, 120, 1.1); toast("Nuovo record · " + prs.map(e => e.name.split(" ").slice(0,3).join(" ")).join(", "), "pr"); }, 150); }

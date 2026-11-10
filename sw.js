@@ -1,5 +1,5 @@
 // Service worker: rete prima (per avere sempre la versione aggiornata), cache se sei offline.
-const CACHE = "diario-202611102030";
+const CACHE = "diario-202611102046";
 const ASSETS = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-180.png",
   "img/hero.jpg", "img/a.jpg", "img/b.jpg", "img/c.jpg", "img/d.jpg", "img/casa.jpg"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS))); self.skipWaiting(); });
