@@ -850,7 +850,7 @@ async function blockFinished(){
   const b = live.blocks[live.cur], isLast = live.cur === live.blocks.length - 1;
   live.sel = null; saveLive();
   await celebrateBlock();
-  if(isLast){ goEnd(); return; }
+  if(isLast){ checkBeforeEnd(); return; }
   const go = () => { live.cur++; live.sel = null; bt = null; saveLive(); render(); scrollTo(0,0); blockIntro(); };
   if(b.rest){ render(false); startRest(b.rest, blockTitle(live.blocks[live.cur + 1]), go); } else go();
 }
@@ -888,6 +888,32 @@ function countUp(el, to, dur = 1100){ const t0 = performance.now(); const f = no
 function playEnd(){
   setTimeout(() => { document.querySelectorAll("[data-count]").forEach(el => countUp(el, +el.dataset.count)); }, 500);
   setTimeout(() => { sfx.end(); haptic([80,60,80,60,240]); fx.burst(innerWidth/2, innerHeight*.2, 140, 1.2); }, 650);
+}
+function incompleteList(){
+  const out = [];
+  live.blocks.forEach((b, i) => {
+    if(blockDone(b)) return;
+    const name = b.type === "check" ? "Routine" : blockTitle(b);
+    if(b.ex[0].sets){
+      const miss = b.ex[0].sets.map((_, r) => r).filter(r => !b.ex.every(e => e.sets[r].done)), w = roundWord(b).toLowerCase();
+      const tot = b.ex[0].sets.length;
+      out.push({ i, r: miss[0], name, detail: miss.length === tot ? "Non fatto" : `${miss.length === 1 ? w.charAt(0).toUpperCase() + w.slice(1) : (w === "giro" ? "Giri" : "Set")} ${miss.map(r => r + 1).join(", ")} di ${tot} ${miss.length === 1 ? "mancante" : "mancanti"}` });
+    } else if(b.type === "check"){
+      const miss = b.ex.filter(e => !e.done).length; out.push({ i, r: -1, name, detail: `${miss} ${miss === 1 ? "esercizio mancante" : "esercizi mancanti"}` });
+    } else out.push({ i, r: -1, name, detail: b.type === "maxreps" ? "Ripetizioni non inserite" : "Non fatto" });
+  });
+  return out;
+}
+async function checkBeforeEnd(){
+  const miss = incompleteList();
+  if(!miss.length) return goEnd();
+  rest = null; await closeOv();
+  sfx.tick(); haptic([40,60,40]);
+  openSheet(`<p class="eyebrow" style="color:var(--warn)">Attenzione</p><p class="title sm">${miss.length === 1 ? "Non hai completato un esercizio" : `Non hai completato ${miss.length} esercizi`}</p>
+    <p class="muted small">Controlla prima di chiudere la seduta: tocca un esercizio per tornarci.</p>
+    <div class="blist">${miss.map(m => `<button class="bitem" data-act="gotomiss" data-i="${m.i}" data-r="${m.r}"><span class="i" style="border-color:var(--warn);color:var(--warn)">${m.i + 1}</span><span class="t"><b>${esc(m.name)}</b><small style="color:var(--warn)">${esc(m.detail)}</small></span>${ICON.arrow}</button>`).join("")}</div>
+    <button class="cta" data-act="gotomiss" data-i="${miss[0].i}" data-r="${miss[0].r}">Torna e completa<span class="arr">${ICON.arrow}</span></button>
+    <button class="gbtn glass" data-act="forceend">Concludi comunque</button>`);
 }
 async function goEnd(){ rest = null; await closeOv(); screen = "end"; keepAwake(false); render(); scrollTo(0,0); }
 
@@ -1057,7 +1083,7 @@ document.addEventListener("click", async ev => {
       inp.value = v ? String(v).replace(".", ",") : (kind === "kg" ? "" : "0"); writeField(inp); bumpInput(inp); haptic(8); tone(kind === "kg" ? 600 : 760, .04, 0, "sine", .07); break; }
     case "round": completeRound(+el.dataset.i); break;
     case "check": { b.ex[+el.dataset.i].done = !b.ex[+el.dataset.i].done; saveLive(); if(b.ex[+el.dataset.i].done){ sfx.done(); haptic(40); }
-      if(blockDone(b)){ render(false); await sleep(300); await celebrateBlock(); if(live.cur === live.blocks.length - 1) goEnd(); else render(false); } else render(false); break; }
+      if(blockDone(b)){ render(false); await sleep(300); await celebrateBlock(); if(live.cur === live.blocks.length - 1) checkBeforeEnd(); else render(false); } else render(false); break; }
     case "nextblock": live.cur++; live.sel = null; bt = null; saveLive(); render(); scrollTo(0,0); blockIntro(); break;
     case "bt-toggle": {
       if(!bt || bt.b !== live.cur) bt = { b: live.cur, acc: 0, t0: null, lastMin: 0, lastTick: -1, fired: false };
@@ -1075,7 +1101,9 @@ document.addEventListener("click", async ev => {
     case "rest-": if(rest){ rest.until -= 15000; tickRest(); } break;
     case "rest+": if(rest){ rest.until += 15000; rest.total = Math.max(rest.total, (rest.until - Date.now())/1000); rest.lastBeep = 99; tickRest(); } break;
     case "restskip": endRest(false); break;
-    case "finish": await closeSheet(); goEnd(); break;
+    case "finish": await closeSheet(); checkBeforeEnd(); break;
+    case "forceend": await closeSheet(); goEnd(); break;
+    case "gotomiss": await closeSheet(); live.cur = +el.dataset.i; live.sel = +el.dataset.r >= 0 ? +el.dataset.r : null; bt = null; saveLive(); render(); scrollTo(0,0); break;
     case "backwork": enterWork(false); break;
     case "save": { if(bt && bt.t0 && b && b.type === "accumulate"){ b.res.secs += (Date.now() - bt.t0)/1000; b.res.tries++; }
       const w = { ...live, end: Date.now() }; delete w.cur; delete w.sel;
